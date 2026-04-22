@@ -1,5 +1,17 @@
 # UniRig: One Model to Rig Them All
 
+> [!IMPORTANT]
+> ### 🔥 Exciting News: Introducing [SkinTokens](https://github.com/VAST-AI-Research/SkinTokens)! 🔥
+> 
+> We are thrilled to announce **SkinTokens**, the powerful successor to UniRig (SIGGRAPH '25). 
+> 
+> While UniRig uses separate stages for skeleton prediction and skinning, SkinTokens **unifies both into a single autoregressive sequence** via learned discrete skin tokens. By introducing **Reinforcement Learning** and an **Efficient Skinning Compression Module**, it pushes the boundaries of automated 3D rigging even further:
+> 
+> - 🚀 **98%–133% improvement** in skinning accuracy!
+> - 🦴 **17%–22% improvement** in bone prediction over state-of-the-art baselines!
+> 
+> 👉 **[Click here to explore the SkinTokens repository now!](https://github.com/VAST-AI-Research/SkinTokens)**
+
 <div align="center">
 
 [![Project Page](https://img.shields.io/badge/🏠-Project%20Page-blue.svg)](https://zjp-shadow.github.io/works/UniRig/)
