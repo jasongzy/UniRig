@@ -21,3 +21,5 @@ spconv-cu118
 -f https://data.pyg.org/whl/torch-2.3.1+cu118.html
 torch_scatter
 torch_cluster
+
+gradio>=5
