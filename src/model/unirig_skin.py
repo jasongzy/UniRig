@@ -7,7 +7,11 @@ from typing import Dict, List
 from transformers import AutoModelForCausalLM, AutoConfig
 import math
 import torch_scatter
-from flash_attn.modules.mha import MHA
+try:
+    from flash_attn.modules.mha import MHA
+    HAS_FLASH_ATTN = torch.cuda.is_available()
+except ImportError:
+    HAS_FLASH_ATTN = False
 
 from .spec import ModelSpec, ModelInput
 from .parse_encoder import MAP_MESH_ENCODER, get_mesh_encoder
@@ -114,8 +118,10 @@ class ResidualCrossAttn(nn.Module):
 
         self.norm1 = nn.LayerNorm(feat_dim)
         self.norm2 = nn.LayerNorm(feat_dim)
-        # self.attention = nn.MultiheadAttention(embed_dim=feat_dim, num_heads=num_heads, batch_first=True)
-        self.attention = MHA(embed_dim=feat_dim, num_heads=num_heads, cross_attn=True)
+        if HAS_FLASH_ATTN:
+            self.attention = MHA(embed_dim=feat_dim, num_heads=num_heads, cross_attn=True)
+        else:
+            self.attention = nn.MultiheadAttention(embed_dim=feat_dim, num_heads=num_heads, batch_first=True)
         self.ffn = nn.Sequential(
             nn.Linear(feat_dim, feat_dim * 4),
             nn.GELU(),
@@ -124,7 +130,10 @@ class ResidualCrossAttn(nn.Module):
         
     def forward(self, q, kv):
         residual = q
-        attn_output = self.attention(q, x_kv=kv)
+        if HAS_FLASH_ATTN:
+            attn_output = self.attention(q, x_kv=kv)
+        else:
+            attn_output, _ = self.attention(q, kv, kv, need_weights=False)
         x = self.norm1(residual + attn_output)
         x = self.norm2(x + self.ffn(x))
         return x
@@ -367,7 +376,8 @@ class UniRigSkin(ModelSpec):
             }
             if not self.training:
                 # must cast to float32 to avoid sparse-conv precision bugs
-                with torch.autocast(device_type='cuda', dtype=torch.float32):
+                device_type = "cuda" if torch.cuda.is_available() else "cpu"
+                with torch.autocast(device_type=device_type, dtype=torch.float32):
                     mesh_feat = self.mesh_encoder(ptv3_input).feat
                     mesh_feat = self.feat_map(mesh_feat).view(B, N, self.feat_dim)
             else:
@@ -426,7 +436,8 @@ class UniRigSkin(ModelSpec):
                 input_features = attn_weight[i, :, :num_bones[i], :].reshape(-1, attn_weight.shape[-1])
                 
                 if self.training:
-                    with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+                    with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
                         pred = self.skinweight_pred(input_features).reshape(cur_N, num_bones[i])
                         skin_pred[i, :, :num_bones[i]] = F.softmax(pred)
                 else:

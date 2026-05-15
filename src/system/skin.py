@@ -59,7 +59,30 @@ class SkinSystem(L.LightningModule):
         if loss_config is not None:
             assert 'loss_sum' not in loss_config, 'loss cannot be named `loss_sum`'
             assert 'val_loss_sum' not in loss_config, 'loss cannot be named `val_loss_sum`'
-    
+
+    def on_load_checkpoint(self, checkpoint: Dict):
+        state_dict = checkpoint.get("state_dict", checkpoint)
+        try:
+            from flash_attn.modules.mha import MHA
+            HAS_FLASH_ATTN = torch.cuda.is_available()
+        except ImportError:
+            HAS_FLASH_ATTN = False
+        if not HAS_FLASH_ATTN:
+            wq_keys = [k for k in list(state_dict.keys()) if k.endswith(".attention.Wq.weight")]
+            for wq_key in wq_keys:
+                prefix = wq_key[: -len(".Wq.weight")]
+                wq_w = state_dict.pop(prefix + ".Wq.weight")
+                wq_b = state_dict.pop(prefix + ".Wq.bias")
+                wkv_w = state_dict.pop(prefix + ".Wkv.weight")
+                wkv_b = state_dict.pop(prefix + ".Wkv.bias")
+                state_dict[prefix + ".in_proj_weight"] = torch.cat([wq_w, wkv_w], dim=0)
+                state_dict[prefix + ".in_proj_bias"] = torch.cat([wq_b, wkv_b], dim=0)
+        if not torch.cuda.is_available():
+            cpe_bias_keys = [k for k in list(state_dict.keys()) if k.endswith(".cpe.0.bias")]
+            for k in cpe_bias_keys:
+                new_key = k.replace(".cpe.0.bias", ".cpe_bias")
+                state_dict[new_key] = state_dict.pop(k)
+
     def on_validation_batch_start(self, batch, batch_idx: int, dataloader_idx: int = 0):
         if self.record_res:
             os.makedirs(self.output_path, exist_ok=True)
@@ -126,7 +149,8 @@ class SkinSystem(L.LightningModule):
         self._validation_loss = defaultdict(list)
     
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         pass
     
     def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0):

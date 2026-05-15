@@ -238,7 +238,15 @@ if __name__ == "__main__":
     # set ckpt path
     resume_from_checkpoint = task.get('resume_from_checkpoint', None)
     resume_from_checkpoint = download(resume_from_checkpoint)
-    if trainer_config.get('strategy', None) == "fsdp":
+
+    is_cuda = torch.cuda.is_available()
+    if not is_cuda:
+        trainer_config["accelerator"] = "cpu"
+        if "devices" in trainer_config:
+            trainer_config["devices"] = "auto"
+        if "strategy" in trainer_config:
+            trainer_config.pop("strategy")
+    elif trainer_config.get('strategy', None) == "fsdp":
         strategy = FSDPStrategy(
             # Enable activation checkpointing on these layers
             auto_wrap_policy={

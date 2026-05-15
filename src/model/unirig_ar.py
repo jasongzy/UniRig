@@ -53,6 +53,8 @@ class UniRigAR(ModelSpec):
         llm_config.torch_dtype = torch.float32
         # Force enable pre_norm
         llm_config.pre_norm = True
+        attn_impl = "flash_attention_2" if torch.cuda.is_available() else "sdpa"
+        llm_config._attn_implementation = attn_impl
         self.transformer = AutoModelForCausalLM.from_config(config=llm_config)
         
         self.hidden_size = llm.hidden_size

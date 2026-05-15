@@ -132,7 +132,8 @@ class ARSystem(L.LightningModule):
             num_faces = num_faces.detach().cpu().numpy()
         try:
             if self.validate_cast == 'bfloat16':
-                with torch.autocast('cuda', dtype=torch.bfloat16):
+                device_type = "cuda" if torch.cuda.is_available() else "cpu"
+                with torch.autocast(device_type, dtype=torch.bfloat16):
                     prediction: List[DetokenizeOutput] = self._predict_step(batch=batch, batch_idx=batch_idx, dataloader_idx=dataloader_idx)
             else:
                 prediction: List[DetokenizeOutput] = self._predict_step(batch=batch, batch_idx=batch_idx, dataloader_idx=dataloader_idx)

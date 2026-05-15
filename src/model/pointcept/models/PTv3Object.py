@@ -295,17 +295,32 @@ class Block(PointModule):
         self.channels = channels
         self.pre_norm = pre_norm
 
+        is_cuda = torch.cuda.is_available()
+        algo = spconv.ConvAlgo.Native if not is_cuda else None
+
         self.cpe = PointSequential(
             spconv.SubMConv3d(
                 channels,
                 channels,
                 kernel_size=3,
-                bias=True,
+                bias=is_cuda,
                 indice_key=cpe_indice_key,
+                algo=algo,
             ),
             nn.Linear(channels, channels),
             norm_layer(channels),
         )
+        if not is_cuda:
+            enable_flash = False
+            self.register_parameter("cpe_bias", nn.Parameter(torch.zeros(channels)))
+            original_forward = self.cpe[0].forward
+
+            def cpu_forward(x, orig_fwd=original_forward, bias_tensor=self.cpe_bias):
+                out = orig_fwd(x)
+                out = out.replace_feature(out.features + bias_tensor)
+                return out
+
+            self.cpe[0].forward = cpu_forward
 
         self.norm1 = PointSequential(norm_layer(channels))
         self.attn = SerializedAttention(
@@ -518,6 +533,8 @@ class Embedding(PointModule):
         self.in_channels = in_channels
         self.embed_channels = embed_channels
 
+        algo = spconv.ConvAlgo.Native if not torch.cuda.is_available() else None
+
         # TODO: check remove spconv
         self.stem = PointSequential(
             conv=spconv.SubMConv3d(
@@ -527,6 +544,7 @@ class Embedding(PointModule):
                 padding=1,
                 bias=False,
                 indice_key="stem",
+                algo=algo,
             )
         )
         if norm_layer is not None:
