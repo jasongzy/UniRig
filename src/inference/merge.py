@@ -382,7 +382,7 @@ def merge(
         if is_vrm:
             bpy.ops.export_scene.vrm(filepath=output_path)
         elif output_path.endswith(".fbx") or output_path.endswith(".FBX"):
-            bpy.ops.export_scene.fbx(filepath=output_path, add_leaf_bones=True)
+            bpy.ops.export_scene.fbx(filepath=output_path, add_leaf_bones=True, path_mode="COPY", embed_textures=True)
         elif output_path.endswith(".glb") or output_path.endswith(".gltf"):
             bpy.ops.export_scene.gltf(filepath=output_path)
         elif output_path.endswith(".dae"):

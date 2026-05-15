@@ -7,10 +7,17 @@ lightning
 addict
 timm
 fast-simplification
+--extra-index-url https://download.blender.org/pypi/
 bpy==4.2
-flash_attn
+# flash_attn
 trimesh
 open3d
 pyrender
 huggingface_hub
 wandb
+numpy==1.26.4
+
+spconv-cu118
+-f https://data.pyg.org/whl/torch-2.3.1+cu118.html
+torch_scatter
+torch_cluster
