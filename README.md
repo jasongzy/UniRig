@@ -74,6 +74,7 @@ We appreciate your patience as we prepare these components for release. Follow [
 
 2.  **Clone the repository:**
     ```bash
+    git lfs install
     git clone https://github.com/VAST-AI-Research/UniRig
     cd UniRig
     ```
