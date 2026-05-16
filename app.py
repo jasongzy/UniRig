@@ -4,10 +4,11 @@ import tempfile
 
 import gradio as gr
 
+CWD = os.path.dirname(os.path.abspath(__file__))
+
 
 def get_examples() -> list[list[str]]:
-    cwd = os.path.dirname(os.path.abspath(__file__))
-    example_dir = os.path.join(cwd, "examples")
+    example_dir = os.path.join(CWD, "examples")
     if not os.path.exists(example_dir):
         return []
     extensions = (".obj", ".fbx", ".glb")
@@ -16,7 +17,7 @@ def get_examples() -> list[list[str]]:
     ]
 
 
-def run_cmd(cmd: list[str], cwd: str) -> tuple[bool, str]:
+def run_cmd(cmd: list[str], cwd: str = CWD) -> tuple[bool, str]:
     process = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     logs = []
     if process.stdout:
@@ -25,29 +26,23 @@ def run_cmd(cmd: list[str], cwd: str) -> tuple[bool, str]:
             logs.append(line)
     process.wait()
 
-    full_log = "".join(logs)
-    return process.returncode == 0, full_log
+    return process.returncode == 0, "".join(logs)
 
 
-def process_pipeline(input_file: str, output_format: str, progress=gr.Progress()) -> str:
-    if not input_file:
-        raise gr.Error("Please upload a file first.")
-
-    input_name = os.path.basename(input_file)
-    name_no_ext = os.path.splitext(input_name)[0]
-    root_dir = os.path.dirname(os.path.abspath(__file__))
+def process_pipeline(input_path: str, output_format: str, progress=gr.Progress()) -> str:
+    if not os.path.isfile(input_path):
+        raise FileNotFoundError(input_path)
 
     temp_dir = tempfile.mkdtemp(prefix="unirig_pipeline_")
-    output_prefix = os.path.join(temp_dir, name_no_ext)
+    output_prefix = os.path.join(temp_dir, os.path.splitext(os.path.basename(input_path))[0])
 
-    skel_output = f"{output_prefix}_skel.fbx"
-    skin_output = f"{output_prefix}_skin.fbx"
-    rigged_output = f"{output_prefix}_rigged.{output_format.lower()}"
+    skel_output_path = f"{output_prefix}_skel.fbx"
+    skin_output_path = f"{output_prefix}_skin.fbx"
+    rigged_output_path = f"{output_prefix}_rigged.{output_format.lower()}"
 
     progress(0.3, desc="Stage 1/3: Generating Skeleton...")
     success, log = run_cmd(
-        ["bash", "launch/inference/generate_skeleton.sh", "--input", input_file, "--output", skel_output],
-        root_dir,
+        ["bash", "launch/inference/generate_skeleton.sh", "--input", input_path, "--output", skel_output_path]
     )
     if success:
         gr.Info("Skeleton generation completed.")
@@ -56,8 +51,7 @@ def process_pipeline(input_file: str, output_format: str, progress=gr.Progress()
 
     progress(0.6, desc="Stage 2/3: Generating Skinning...")
     success, log = run_cmd(
-        ["bash", "launch/inference/generate_skin.sh", "--input", skel_output, "--output", skin_output],
-        root_dir,
+        ["bash", "launch/inference/generate_skin.sh", "--input", skel_output_path, "--output", skin_output_path]
     )
     if success:
         gr.Info("Skinning generation completed.")
@@ -70,13 +64,12 @@ def process_pipeline(input_file: str, output_format: str, progress=gr.Progress()
             "bash",
             "launch/inference/merge.sh",
             "--source",
-            skin_output,
+            skin_output_path,
             "--target",
-            input_file,
+            input_path,
             "--output",
-            rigged_output,
-        ],
-        root_dir,
+            rigged_output_path,
+        ]
     )
     if success:
         gr.Info("Merging completed.")
@@ -84,33 +77,33 @@ def process_pipeline(input_file: str, output_format: str, progress=gr.Progress()
         raise gr.Error(f"Merging failed:\n{log}")
 
     progress(1.0, desc="Done!")
-    return rigged_output
+    gr.Success("Pipeline finished successfully!")
+    return rigged_output_path
 
 
 if __name__ == "__main__":
-    cwd = os.path.dirname(os.path.abspath(__file__))
     with gr.Blocks(title="UniRig") as app:
         gr.Markdown("# UniRig: One Model to Rig Them All")
         gr.Markdown("[Code](https://github.com/VAST-AI-Research/UniRig)")
 
         with gr.Row():
             with gr.Column():
-                input_file = gr.File(label="Input Mesh", file_types=[".obj", ".fbx", ".glb"])
+                input_3d = gr.File(label="Input Mesh", file_types=[".obj", ".fbx", ".glb"])
                 output_format = gr.Radio(label="Output Format", choices=["glb", "fbx"], value="glb")
-                run_btn = gr.Button("Run Rigging", variant="primary")
+                run_btn = gr.Button("Run", variant="primary")
 
-                gr.Examples(examples=get_examples(), inputs=input_file, label="Examples")
+                gr.Examples(examples=get_examples(), inputs=input_3d, label="Examples")
 
             with gr.Column():
-                output_file = gr.File(label="Rigged Mesh")
+                output_3d = gr.File(label="Rigged Mesh")
 
         run_btn.click(
             fn=lambda: None,
-            outputs=output_file,
+            outputs=output_3d,
         ).success(
             fn=process_pipeline,
-            inputs=[input_file, output_format],
-            outputs=output_file,
+            inputs=[input_3d, output_format],
+            outputs=output_3d,
         )
 
     app.launch(server_name="0.0.0.0", server_port=7860, show_error=True, share=False)
